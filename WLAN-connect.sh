@@ -1,12 +1,8 @@
 #!/bin/bash
 
-#DEVICEID=$(echo -e "SELECT parent_id FROM resources WHERE value like '\0045$ROBOT\0045'" |psql dister_worker -t )
-#DeviceIP=$(psql dister_worker -t -c "SELECT value FROM resources WHERE id='$DEVICEID'" |grep -o "192.168.[0-9].15")
-
-#IP=$DeviceIP
-IP=192.168.2.15
-NAME="JollaGuest"
-PASSPHRASE=Welcome\ Guest
+IP=$DeviceIP
+NAME="WLAN_NAME"
+PASSPHRASE="WLAN_PASS"
 SLEEP="sleep 10"
 echo $IP
 echo $NAME
@@ -18,18 +14,17 @@ $SLEEP
 
 # grep wlan ap
 HASH=$(ssh root@$IP "/usr/lib/connman/tools/connmanctl services | grep $NAME")
-#HASH=$(echo $HASH | sed 's/^ *//')
+HASH=$(echo $HASH | sed 's/^ *//')
 echo "HASH: $HASH"
 
-# create config file in /tmp
-# CONFIG=$(echo $HASH | sed 's/^ *//')
-# CONFIG="$CONFIG.config"
-# echo -ne "CONFIG: $CONFIG\n"
+IFS=' ' read -ra ARRAY <<< "$HASH"
+HASH="${ARRAY[1]}"
+echo "HASH: $HASH"
 
-cat << EOF > /tmp/wifi_5056a8014dc6_4a6f6c6c614775657374_managed_psk
-[wifi_5056a8014dc6_4a6f6c6c614775657374_managed_psk]
+cat << EOF > /tmp/"$HASH"
+[$HASH]
 Name=$NAME
-SSID=4a6f6c6c614775657374
+SSID=4a6f6c6c614775657374 # shouldn't be hardcoded but extracted from $HASH
 Frequency=2472
 Favorite=true
 AutoConnect=true
@@ -38,10 +33,20 @@ IPv6.method=auto
 IPv6.privacy=prefered
 Passphrase=$PASSPHRASE
 EOF
+cat /tmp/"$HASH"
 
 # create dir for JollaGuest settings
-ssh root@$IP "mkdir -pv /var/lib/connman/wifi_5056a8014dc6_4a6f6c6c614775657374_managed_psk"
+ssh root@$IP "mkdir -pv /var/lib/connman/\"$HASH\""
 # copy config file to device
-scp /tmp/wifi_5056a8014dc6_4a6f6c6c614775657374_managed_psk root@$IP:"/var/lib/connman/wifi_5056a8014dc6_4a6f6c6c614775657374_managed_psk/settings"
+scp /tmp/"$HASH" root@$IP:"/var/lib/connman/\"$HASH\"/settings"
+ssh root@$IP "chmod -R 700 /var/lib/connman/\"$HASH\""
 # remove temp config file
-rm -f /tmp/wifi_5056a8014dc6_4a6f6c6c614775657374_managed_psk
+rm -f /tmp/"$HASH"
+
+# RESTART WLAN
+# disable wifi
+ssh root@$IP "/usr/lib/connman/tools/connmanctl disable wifi"
+$SLEEP
+# enable wifi
+ssh root@$IP "/usr/lib/connman/tools/connmanctl enable wifi"
+$SLEEP
